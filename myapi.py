@@ -16,7 +16,7 @@ def fetch_results(df):
 
     # Define the analysis prompt
     analysis_prompt = f"""
-    Analyze the following WhatsApp group messages and provide structured insights not add line like Let me know if you'd like deeper analysis on specific segments! in last:
+    Analyze the following WhatsApp group messages and provide structured insights only not anything about you:
 
     ### Input Messages:
     {all_messages}
