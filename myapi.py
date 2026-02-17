@@ -1,54 +1,69 @@
-def fetch_results(df):
-    from openai import OpenAI
+import os
+from openai import OpenAI
 
-    # Initialize the OpenAI client with OpenRouter
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key="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",
-        # Replace with your actual API key
+
+# Initialize Groq client (OpenAI-compatible API)
+def get_client():
+    return OpenAI(
+        base_url="https://api.groq.com/openai/v1",
+        api_key=os.getenv("GROQ_API_KEY")  # Store this in secrets
     )
 
-    # WhatsApp group messages (truncated for brevity; replace with full data)
-    # Combine all messages into one big paragraph
-    all_messages = ' '.join(df['message'].tolist())
 
-    # Now you can use 'all_messages' in your API prompt
-
-    # Define the analysis prompt
-    analysis_prompt = f"""
-    Analyze the following WhatsApp group messages and provide structured insights only not anything about you:
-
-    ### Input Messages:
-    {all_messages}
-
-    ### Tasks:
-    1. **Categorize Topics**: Identify key discussion topics (e.g., Academics, Logistics, Casual Chat).
-    2. **Interaction Types**: Classify messages (e.g., Announcements, Queries, Commands, Jokes).
-    3. **Sentiment Trends**: Highlight positive/negative/neutral tones (use emojis as cues).
-    4. **Key Entities**: Extract important names, deadlines, or events.
-    5. **Summary**: A concise paragraph summarizing the group's activity.
-
-    ### Output Format:
-    - **Topics**: [Comma-separated list]
-    - **Interactions**: [Comma-separated list]
-    - **Sentiment**: [Positive/Negative/Neutral dominant]
-    - **Entities**: [List of names/dates/events]
-    - **Summary**: [1-2 paragraph analysis]
+def fetch_results(df):
+    """
+    Takes a dataframe with a 'message' column
+    Returns structured WhatsApp chat analysis using Groq LLaMA 3.1
     """
 
-    # Generate the analysis
-    completion = client.chat.completions.create(
-        extra_headers={
-            "HTTP-Referer": "https://example.com",  # Replace with your site
-            "X-Title": "WhatsApp Analyzer",  # Optional
-        },
-        model="deepseek/deepseek-chat-v3-0324:free",
-        messages=[
-            {"role": "system", "content": "You are a data analyst specializing in chat message analysis."},
-            {"role": "user", "content": analysis_prompt}
-        ],
-        temperature=0.3,  # Reduce randomness for factual analysis
-    )
+    client = get_client()
 
-    # Print the results
-    return(completion.choices[0].message.content)
+    # Combine all messages into one large string
+    all_messages = " ".join(df["message"].dropna().astype(str).tolist())
+
+    # ⚠️ Optional safety: truncate very large chats (Groq models have token limits)
+    MAX_CHAR_LENGTH = 12000
+    if len(all_messages) > MAX_CHAR_LENGTH:
+        all_messages = all_messages[:MAX_CHAR_LENGTH]
+
+    analysis_prompt = f"""
+Analyze the following WhatsApp group messages and provide structured insights only.
+
+### Input Messages:
+{all_messages}
+
+### Tasks:
+1. Categorize key discussion topics (Academics, Logistics, Casual Chat, etc.)
+2. Classify interaction types (Announcements, Queries, Commands, Jokes, etc.)
+3. Identify overall sentiment trend (Positive / Negative / Neutral)
+4. Extract important entities (Names, Dates, Events)
+5. Provide a short summary (1-2 paragraphs)
+
+### Output Format:
+- Topics: [Comma-separated list]
+- Interactions: [Comma-separated list]
+- Sentiment: [Dominant tone]
+- Entities: [List]
+- Summary: [Paragraph]
+"""
+
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a professional data analyst specializing in structured chat analysis."
+                },
+                {
+                    "role": "user",
+                    "content": analysis_prompt
+                }
+            ],
+            temperature=0.3,
+        )
+
+        return completion.choices[0].message.content
+
+    except Exception as e:
+        return f"Error occurred while generating analysis: {str(e)}"
